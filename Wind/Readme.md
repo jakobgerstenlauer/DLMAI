@@ -14,13 +14,12 @@ Because the recurrent layer needs its input as a 3-D matrix, the data matrix is 
 and attributes has size 1.
 
 The architecture for this task is composed by:
-
-    * A first RNN layer with input size the length of the training window with an attribute per element in the sequence.
-    * Optionally several stacked RNN layers
-    * A dense layer with one neuron with linear activation, that is the one that computes the regression as output.
+* A first RNN layer with input size the length of the training window with an attribute per element in the sequence.
+* Optionally several stacked RNN layers
+* A dense layer with one neuron with linear activation, that is the one that computes the regression as output.
 
 All the configuration for the network, the training and the split of the data is read from a configuration file in JSON format like this:
-''
+```
 {
   "datasize": 0000000,
   "testsize": 000000, # Half validation, half test
@@ -34,16 +33,16 @@ All the configuration for the network, the training and the split of the data is
   "batch": 0000,
   "epochs": 00
 }
-''
+```
 The optimizer used is RMSprop (Keras documentation recommends it for for RNN), the loss function is the mean square error (MSE).
 In this problem we can use as baseline the MSE of the persistence model, that is, predicting the t+1
 step in the series as the value of the step t.
 
 Elements to play with:
-    * The size of the windows
-    * The type of RNN (LSTM, GRU, SimpleRNN)
-    * The dropout
-    * The number of layers
-    * Batch size
-    * Number of epochs
-    * Use an adaptive optimizer like adagrad or adam
+* The size of the windows
+* The type of RNN (LSTM, GRU, SimpleRNN)
+* The dropout
+* The number of layers
+* Batch size
+* Number of epochs
+* Use an adaptive optimizer like adagrad or adam
