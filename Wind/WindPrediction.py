@@ -77,18 +77,29 @@ if __name__ == '__main__':
 
     print("Starting:", time.ctime())
 
-    ############################################
+  ############################################
     # Data
 
     vars = {0: 'wind_speed', 1: 'air_density', 2: 'temperature', 3: 'pressure'}
 
     wind = np.load('Wind.npz')
     print(wind.files)
-    wind = wind['90-45142']
-    wind = wind[:, 0]
+    # ['90-45142', '90-45143', '90-45230', '90-45229']
+    m1 = wind['90-45142']
+    m1 = m1[:, 0:3]
 
+    m2 = wind['90-45143']
+    m2 = m2[:, 0:3]
+
+    m3 = wind['90-45230']
+    m3 = m3[:, 0:3]
+
+    m4 = wind['90-45229']
+    m4 = m4[:, 0:3]
+
+    data = np.concatenate((m1, m2, m3, m4))
     scaler = StandardScaler()
-    wind = scaler.fit_transform(wind.reshape(-1, 1))
+    wind = scaler.fit_transform(data)
 
     # Size of the training and size for validatio+test set (half for validation, half for test)
     datasize = config['datasize']
