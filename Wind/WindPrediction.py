@@ -13,10 +13,17 @@ WindPrediction
 
 :Created on: 06/09/2017 9:47 
 
+
+To check the Keras version:
+python -c "import keras; print keras.__version__"
 """
 
+#import matplotlib
+#matplotlib.use('Agg')
+#import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 import numpy as np
-
 from keras.models import Sequential
 from keras.layers import Dense, Activation
 from keras.layers import LSTM, GRU
@@ -27,8 +34,21 @@ from sklearn.metrics import mean_squared_error
 import argparse
 import json
 import time
+from keras.callbacks import Callback
 
 __author__ = 'bejar'
+
+class AccHistory(Callback):
+        def on_train_begin(self, logs={}):
+                self.losses=[]
+        def on_batch_end(self, batch, logs={}):
+                self.losses.append(logs.get('acc'))
+
+class LossHistory(Callback):
+        def on_train_begin(self, logs={}):
+                self.losses = []
+        def on_batch_end(self, batch, logs={}):
+                self.losses.append(logs.get('loss'))
 
 def lagged_vector(data, lag=1):
     """
@@ -69,6 +89,8 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', help="Verbose output (enables Keras verbose output)", action='store_true', default=False)
     parser.add_argument('--gpu', help="Use LSTM/GRU gru implementation", action='store_true', default=False)
     args = parser.parse_args()
+	
+    ModelName='RNN'
 
     verbose = 1 if args.verbose else 0
     impl = 2 if args.gpu else 0
@@ -77,7 +99,7 @@ if __name__ == '__main__':
 
     print("Starting:", time.ctime())
 
-  ############################################
+    ############################################
     # Data
 
     vars = {0: 'wind_speed', 1: 'air_density', 2: 'temperature', 3: 'pressure'}
@@ -101,7 +123,7 @@ if __name__ == '__main__':
     scaler = StandardScaler()
     wind = scaler.fit_transform(data)
 
-    # Size of the training and size for validatio+test set (half for validation, half for test)
+    # Size of the training and size for validation + test set (half for validation, half for test)
     datasize = config['datasize']
     testsize = config['testsize']
 
@@ -155,15 +177,20 @@ if __name__ == '__main__':
     # Training
 
     optimizer = RMSprop(lr=0.0001)
-    model.compile(loss='mean_squared_error', optimizer=optimizer)
+    model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=['accuracy'])
+
+    model.summary()
 
     batch_size = config['batch']
     nepochs = config['epochs']
 
-    model.fit(train_x, train_y,
+    history = model.fit(train_x, train_y,
               batch_size=batch_size,
               epochs=nepochs,
-              verbose=verbose, validation_data=(val_x, val_y))
+	      validation_split=0.2,
+              verbose=verbose, 
+	      shuffle=True, 
+	      callbacks=[AccHistory(), LossHistory()])
 
     ############################################
     # Results
@@ -172,13 +199,37 @@ if __name__ == '__main__':
     score = model.evaluate(val_x, val_y,
                            batch_size=batch_size,
                            verbose=0)
-    print('MSE Val= ', score)
-    print ('MSE Val persistence =', mean_squared_error(val_y[1:], val_y[0:-1]))
 
-    score = model.evaluate(test_x, test_y,
-                           batch_size=batch_size,
-                           verbose=0)
-    print('MSE Test= ', score)
-    print ('MSE Test persistence =', mean_squared_error(test_y[1:], test_y[0:-1]))
-    print()
-    print("Ending:", time.ctime())
+    #print('MSE Val= ', score)
+    #print('MSE Val persistence =', mean_squared_error(val_y[1:], val_y[0:-1]))
+    print('test loss:', score[0])
+    print('test accuracy:', score[1])
+
+    #print('MSE Test= ', score)
+    #print ('MSE Test persistence =', mean_squared_error(test_y[1:], test_y[0:-1]))
+    #print()
+    #print("Ending:", time.ctime())
+
+    #Accuracy plot
+    fig = Figure()
+    FigureCanvas(fig)
+    ax = fig.add_subplot(111)
+    ax.plot(history.history['acc'])
+    ax.plot(history.history['val_acc'])
+    ax.set_title('Model accuracy')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Accuracy')
+    ax.legend(['train','val'], loc='upper left')
+    fig.savefig(ModelName+'_accuracy.pdf')
+
+    #Loss plot
+    fig2 = Figure()
+    FigureCanvas(fig2)
+    ax = fig2.add_subplot(111)
+    ax.plot(history.history['loss'])
+    ax.plot(history.history['val_loss'])
+    ax.set_title('Model loss')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Accuracy')
+    ax.legend(['train','val'], loc='upper left')
+    fig2.savefig(ModelName+'_loss.pdf')
