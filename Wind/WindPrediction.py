@@ -18,9 +18,6 @@ To check the Keras version:
 python -c "import keras; print keras.__version__"
 """
 
-#import matplotlib
-#matplotlib.use('Agg')
-#import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 import numpy as np
@@ -34,15 +31,16 @@ from sklearn.metrics import mean_squared_error
 import argparse
 import json
 import time
+from math import sqrt
 from keras.callbacks import Callback
 
 __author__ = 'bejar'
 
-class AccHistory(Callback):
+class MeanSquaredErrorHistory(Callback):
         def on_train_begin(self, logs={}):
                 self.losses=[]
         def on_batch_end(self, batch, logs={}):
-                self.losses.append(logs.get('acc'))
+                self.losses.append(logs.get('mse'))
 
 class LossHistory(Callback):
         def on_train_begin(self, logs={}):
@@ -145,6 +143,32 @@ if __name__ == '__main__':
     test_x, test_y = test[half_test:, :-1], test[half_test:,-1]
     test_x = np.reshape(test_x, (test_x.shape[0], test_x.shape[1], 1))
 
+    #Calculate the baseline root mean squared error of the persistence model for the validation set(i.e. "walk-forward validation")
+    #Compare: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
+    historyX = [y for y in train_y]
+    predictions = list()
+    for i in range(len(val_y)):
+        # make prediction
+        predictions.append(historyX[-1])
+        # observation
+        historyX.append(val_y[i])
+    #report performance
+    rmse = sqrt(mean_squared_error(val_y, predictions))
+    print('Benchmark RMSE validation set: %.3f' % rmse)
+
+    #Calculate the baseline root mean squared error of the persistence model for the test set(i.e. "walk-forward validation")
+    #Compare: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
+    historyX = [y for y in test_y]
+    predictions = list()
+    for i in range(len(test_y)):
+        # make prediction
+        predictions.append(historyX[-1])
+        # observation
+        historyX.append(test_y[i])
+    #report performance
+    rmse = sqrt(mean_squared_error(test_y, predictions))
+    print('Benchmark RMSE test set: %.3f' % rmse)
+
     ############################################
     # Model
 
@@ -177,7 +201,7 @@ if __name__ == '__main__':
     # Training
 
     optimizer = RMSprop(lr=0.0001)
-    model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=['accuracy'])
+    model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=['mean_squared_error'])
 
     model.summary()
 
@@ -187,10 +211,10 @@ if __name__ == '__main__':
     history = model.fit(train_x, train_y,
               batch_size=batch_size,
               epochs=nepochs,
-	      validation_split=0.2,
               verbose=verbose, 
 	      shuffle=True, 
-	      callbacks=[AccHistory(), LossHistory()])
+              validation_data=(val_x, val_y),
+	      callbacks=[MeanSquaredErrorHistory(), LossHistory()])
 
     ############################################
     # Results
@@ -200,27 +224,23 @@ if __name__ == '__main__':
                            batch_size=batch_size,
                            verbose=0)
 
-    #print('MSE Val= ', score)
-    #print('MSE Val persistence =', mean_squared_error(val_y[1:], val_y[0:-1]))
+    print('MSE Val= ', score)
+    print('MSE Val persistence =', mean_squared_error(val_y[1:], val_y[0:-1]))
     print('test loss:', score[0])
-    print('test accuracy:', score[1])
-
-    #print('MSE Test= ', score)
-    #print ('MSE Test persistence =', mean_squared_error(test_y[1:], test_y[0:-1]))
-    #print()
-    #print("Ending:", time.ctime())
+    print(history.history.keys())
+    #dict_keys(['val_loss', 'val_mean_squared_error', 'loss', 'mean_squared_error'])
 
     #Accuracy plot
     fig = Figure()
     FigureCanvas(fig)
     ax = fig.add_subplot(111)
-    ax.plot(history.history['acc'])
-    ax.plot(history.history['val_acc'])
-    ax.set_title('Model accuracy')
+    ax.plot(history.history['mean_squared_error'])
+    ax.plot(history.history['val_mean_squared_error'])
+    ax.set_title('Mean squared error')
     ax.set_xlabel('Epoch')
-    ax.set_ylabel('Accuracy')
+    ax.set_ylabel('Mean squared error')
     ax.legend(['train','val'], loc='upper left')
-    fig.savefig(ModelName+'_accuracy.pdf')
+    fig.savefig(ModelName+'_mean_squared_error.pdf')
 
     #Loss plot
     fig2 = Figure()
@@ -230,6 +250,6 @@ if __name__ == '__main__':
     ax.plot(history.history['val_loss'])
     ax.set_title('Model loss')
     ax.set_xlabel('Epoch')
-    ax.set_ylabel('Accuracy')
+    ax.set_ylabel('Loss')
     ax.legend(['train','val'], loc='upper left')
     fig2.savefig(ModelName+'_loss.pdf')
