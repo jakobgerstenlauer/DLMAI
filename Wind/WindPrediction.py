@@ -1,13 +1,12 @@
 """
 .. module:: WindPrediction
-
 WindPrediction
 *************
 
 :Description: WindPrediction
 
 :Authors: bejar
-    
+            
 
 :Version: 
 
@@ -81,54 +80,18 @@ def load_config_file(nfile, abspath=False):
 
     return json.loads(s)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config', help='Experiment configuration')
-    parser.add_argument('--verbose', help="Verbose output (enables Keras verbose output)", action='store_true', default=False)
-    parser.add_argument('--gpu', help="Use LSTM/GRU gru implementation", action='store_true', default=False)
-    args = parser.parse_args()
-	
-    ModelName='RNN'
 
-    verbose = 1 if args.verbose else 0
-    impl = 2 if args.gpu else 0
+def rnn(lag, drop, nlayers, nntype, activation, activation_r, neurons):
+    """
+    Run a RNN of given type reading additional information from the configuration json file
 
-    config = load_config_file(args.config)
+    :param lag: The size of the time window.
+    :param drop: The drop-out rate.
+    :param nlayers: The number of layers of the RNN.
+    :param nntype: The type of RNN, either 'LSTM' or 'GRU'
+    :return:
+    """
 
-    print("Starting:", time.ctime())
-
-    ############################################
-    # Data
-
-    vars = {0: 'wind_speed', 1: 'air_density', 2: 'temperature', 3: 'pressure'}
-
-    wind = np.load('Wind.npz')
-    print(wind.files)
-    # ['90-45142', '90-45143', '90-45230', '90-45229']
-    m1 = wind['90-45142']
-    m1 = m1[:, 0:3]
-
-    m2 = wind['90-45143']
-    m2 = m2[:, 0:3]
-
-    m3 = wind['90-45230']
-    m3 = m3[:, 0:3]
-
-    m4 = wind['90-45229']
-    m4 = m4[:, 0:3]
-
-    data = np.concatenate((m1, m2, m3, m4))
-    scaler = StandardScaler()
-    wind = scaler.fit_transform(data)
-
-    # Size of the training and size for validation + test set (half for validation, half for test)
-    datasize = config['datasize']
-    testsize = config['testsize']
-
-    # Length of the lag for the training window
-    lag = config['lag']
-
-    wind_train = wind[:datasize, 0]
     train = lagged_vector(wind_train, lag=lag)
     train_x, train_y = train[:, :-1], train[:,-1]
     train_x = np.reshape(train_x, (train_x.shape[0], train_x.shape[1], 1))
@@ -147,6 +110,7 @@ if __name__ == '__main__':
     #Compare: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
     historyX = [y for y in train_y]
     predictions = list()
+    
     for i in range(len(val_y)):
         # make prediction
         predictions.append(historyX[-1])
@@ -172,15 +136,14 @@ if __name__ == '__main__':
     ############################################
     # Model
 
-    neurons = config['neurons']
-    drop = config['drop']
-    nlayers = config['nlayers']
-    RNN = LSTM if config['rnn'] == 'LSTM' else GRU
-
-    activation = config['activation']
-    activation_r = config['activation_r']
-
+    ModelName=str(nntype)+"_"+str(drop)+"_"+str(nlayers)+"_"+str(lag)+"_"
+    print(ModelName)
     model = Sequential()
+    print("activation: " +activation)
+    print("recurrent activation: "+activation_r)
+    print("nr of neurons: "+str(neurons))
+    RNN = LSTM if nntype == 'LSTM' else GRU
+
     if nlayers == 1:
         model.add(RNN(neurons, input_shape=(train_x.shape[1], 1), implementation=impl, dropout=drop,
                       activation=activation, recurrent_activation=activation_r))
@@ -212,9 +175,9 @@ if __name__ == '__main__':
               batch_size=batch_size,
               epochs=nepochs,
               verbose=verbose, 
-	      shuffle=True, 
+              shuffle=True, 
               validation_data=(val_x, val_y),
-	      callbacks=[MeanSquaredErrorHistory(), LossHistory()])
+              callbacks=[MeanSquaredErrorHistory(), LossHistory()])
 
     ############################################
     # Results
@@ -253,3 +216,95 @@ if __name__ == '__main__':
     ax.set_ylabel('Loss')
     ax.legend(['train','val'], loc='upper left')
     fig2.savefig(ModelName+'_loss.pdf')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', default='config', help='Experiment configuration')
+    parser.add_argument('--verbose', help="Verbose output (enables Keras verbose output)", action='store_true', default=False)
+    parser.add_argument('--gpu', help="Use LSTM/GRU gru implementation", action='store_true', default=False)
+    args = parser.parse_args()
+	
+    verbose = 1 if args.verbose else 0
+    impl = 2 if args.gpu else 0
+
+    config = load_config_file(args.config)
+
+    print("Starting:", time.ctime())
+
+    ############################################
+    # Data
+
+    vars = {0: 'wind_speed', 1: 'air_density', 2: 'temperature', 3: 'pressure'}
+
+    wind = np.load('Wind.npz')
+    print(wind.files)
+    # ['90-45142', '90-45143', '90-45230', '90-45229']
+    m1 = wind['90-45142']
+    m1 = m1[:, 0:3]
+
+    m2 = wind['90-45143']
+    m2 = m2[:, 0:3]
+
+    m3 = wind['90-45230']
+    m3 = m3[:, 0:3]
+
+    m4 = wind['90-45229']
+    m4 = m4[:, 0:3]
+
+    data = np.concatenate((m1, m2, m3, m4))
+    scaler = StandardScaler()
+    wind = scaler.fit_transform(data)
+
+    # Size of the training and size for validation + test set (half for validation, half for test)
+    datasize = config['datasize']
+    testsize = config['testsize']
+
+    wind_train = wind[:datasize, 0]
+
+    activation = config['activation']
+    activation_r = config['activation_r']
+    neurons = config['neurons']
+
+    print("a: "+activation)
+    print("ar: "+activation_r) 
+    print("neurons: "+str(neurons))
+
+    rnn(4, 0.0, 1, 'LSTM',activation, activation_r, neurons)
+    rnn(4, 0.0, 2, 'LSTM',activation, activation_r, neurons)
+    rnn(4, 0.0, 3, 'LSTM',activation, activation_r, neurons)
+    rnn(6, 0.0, 1, 'LSTM',activation, activation_r, neurons)
+    rnn(6, 0.0, 2, 'LSTM',activation, activation_r, neurons)
+    rnn(6, 0.0, 3, 'LSTM',activation, activation_r, neurons)
+    rnn(8, 0.0, 1, 'LSTM',activation, activation_r, neurons)
+    rnn(8, 0.0, 2, 'LSTM',activation, activation_r, neurons)
+    rnn(8, 0.0, 3, 'LSTM',activation, activation_r, neurons)
+
+    rnn(4, 0.2, 1, 'LSTM',activation, activation_r, neurons)
+    rnn(4, 0.2, 2, 'LSTM',activation, activation_r, neurons)
+    rnn(4, 0.2, 3, 'LSTM',activation, activation_r, neurons)
+    rnn(6, 0.2, 1, 'LSTM',activation, activation_r, neurons)
+    rnn(6, 0.2, 2, 'LSTM',activation, activation_r, neurons)
+    rnn(6, 0.2, 3, 'LSTM',activation, activation_r, neurons)
+    rnn(8, 0.2, 1, 'LSTM',activation, activation_r, neurons)
+    rnn(8, 0.2, 2, 'LSTM',activation, activation_r, neurons)
+    rnn(8, 0.2, 3, 'LSTM',activation, activation_r, neurons)
+
+    rnn(4, 0.0, 1, 'GRU',activation, activation_r, neurons)
+    rnn(4, 0.0, 2, 'GRU',activation, activation_r, neurons)
+    rnn(4, 0.0, 3, 'GRU',activation, activation_r, neurons)
+    rnn(6, 0.0, 1, 'GRU',activation, activation_r, neurons)
+    rnn(6, 0.0, 2, 'GRU',activation, activation_r, neurons)
+    rnn(6, 0.0, 3, 'GRU',activation, activation_r, neurons)
+    rnn(8, 0.0, 1, 'GRU',activation, activation_r, neurons)
+    rnn(8, 0.0, 2, 'GRU',activation, activation_r, neurons)
+    rnn(8, 0.0, 3, 'GRU',activation, activation_r, neurons)
+
+    rnn(4, 0.2, 1, 'GRU',activation, activation_r, neurons)
+    rnn(4, 0.2, 2, 'GRU',activation, activation_r, neurons)
+    rnn(4, 0.2, 3, 'GRU',activation, activation_r, neurons)
+    rnn(6, 0.2, 1, 'GRU',activation, activation_r, neurons)
+    rnn(6, 0.2, 2, 'GRU',activation, activation_r, neurons)
+    rnn(6, 0.2, 3, 'GRU',activation, activation_r, neurons)
+    rnn(8, 0.2, 1, 'GRU',activation, activation_r, neurons)
+    rnn(8, 0.2, 2, 'GRU',activation, activation_r, neurons)
+    rnn(8, 0.2, 3, 'GRU',activation, activation_r, neurons)
